@@ -224,7 +224,7 @@
 				var png:ByteArray = encoder.encode( bmp );
 				
 				var stream:FileStream = new FileStream();
-				stream.openAsync( saveFile, FileMode.WRITE );
+				stream.open( saveFile, FileMode.WRITE );
 				stream.writeBytes( png );
 				stream.close();
 				
