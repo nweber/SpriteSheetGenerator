@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark"
+	xmlns:mx="library://ns.adobe.com/flex/mx"
+	width="500" height="625">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.graphics.codec.PNGEncoder;
+			
+			private var pngDirectory:File;
+			private var saveFile:File;
+			
+			private var fileQueue:Array;
+			private var imageDatas:Array;
+			
+			private var currentImageFile:File;
+			private var imageLoader:Loader;
+			
+			private function handleSelectDirectory( event:MouseEvent ):void {
+				pngDirectory = new File();
+				pngDirectory.addEventListener( Event.SELECT, handleBrowseSelect );
+				pngDirectory.browseForDirectory( "Selecy Directory" );
+			}
+			
+			private function handleBrowseSelect( event:Event ):void {
+				pngDirectory.removeEventListener( Event.SELECT, handleBrowseSelect );
+				pngDirectoryDisplay.text = pngDirectory.nativePath;
+			}
+			
+			private function handleCreateClick( event:MouseEvent ):void {
+				if ( !pngDirectory ) {
+					Alert.show( "Please select a PNG directory.", "Error" );
+					return;
+				}
+				
+				saveFile = new File();
+				saveFile.addEventListener( Event.SELECT, handleSaveSelect );
+				saveFile.browseForSave( "Select Save Destination" );
+			}
+			
+			private function handleSaveSelect( event:Event ):void {
+				saveFile.removeEventListener( Event.SELECT, handleSaveSelect );
+				
+				if ( saveFile.extension != "png" ) {
+					var idx:int = saveFile.nativePath.lastIndexOf( "." );
+					var path:String = ( idx == -1 ) ? saveFile.nativePath : saveFile.nativePath.substring( 0, idx );
+					saveFile.nativePath = path + ".png";
+				}
+				
+				startBitmapGeneration();
+			}
+			
+			private function startBitmapGeneration():void {
+				fileQueue = pngDirectory.getDirectoryListing();
+				fileQueue.reverse();
+				imageDatas = [];
+				
+				loadingDisplay.visible = true;
+				processFileQueue();
+ 			}
+			
+			private function processFileQueue():void {
+				if ( fileQueue.length > 0 ) {
+					currentImageFile = fileQueue.pop();
+					
+					imageLoader = new Loader();
+					imageLoader.contentLoaderInfo.addEventListener( Event.COMPLETE, handleImageLoadComplete );
+					imageLoader.contentLoaderInfo.addEventListener( IOErrorEvent.IO_ERROR, handleImageLoadError );
+					imageLoader.load( new URLRequest( currentImageFile.nativePath ) );
+				}
+				else {
+					generateBitmap();
+				}
+			}
+			
+			private function handleImageLoadComplete( event:Event ):void {
+				imageDatas.push( ( imageLoader.content as Bitmap).bitmapData );
+				
+				currentImageFile = null;
+				imageLoader.contentLoaderInfo.removeEventListener( Event.COMPLETE, handleImageLoadComplete );
+				imageLoader.contentLoaderInfo.removeEventListener( IOErrorEvent.IO_ERROR, handleImageLoadError );
+				imageLoader = null;
+				
+				processFileQueue();
+			}
+			
+			private function handleImageLoadError( event:Event ):void {
+				Alert.show( "There was an error loading file: " + currentImageFile.nativePath, "Error" );
+				
+				currentImageFile = null;
+				imageLoader.contentLoaderInfo.removeEventListener( Event.COMPLETE, handleImageLoadComplete );
+				imageLoader.contentLoaderInfo.removeEventListener( IOErrorEvent.IO_ERROR, handleImageLoadError );
+				imageLoader = null;
+				
+				clear();
+			}
+			
+			private function generateBitmap():void {
+				var numColumns:int = columnStepper.value;
+				var numRows:int = rowStepper.value;
+				
+				if ( layoutGroup.selectedValue == "horizontal" ) {
+					numColumns = imageDatas.length;
+					numRows = 1;
+				}
+				else if ( layoutGroup.selectedValue == "vertical" ) {
+					numColumns = 1;
+					numRows = imageDatas.length;
+				}
+				else {
+					numColumns = columnStepper.value;
+					numRows = rowStepper.value;
+				}
+				
+				var imageWidth:Number = (imageDatas[0] as BitmapData).width;
+				var imageHeight:Number = (imageDatas[0] as BitmapData).height;
+				
+				var columnWidth:Number;
+				var rowHeight:Number;
+				var scale:Number;
+				
+				if ( sizeGroup.selectedValue == "custom" ) {
+					columnWidth = cellWidthStepper.value;
+					rowHeight = cellHeightStepper.value;
+					// calculate scale
+					
+				}
+				else {
+					columnWidth = imageWidth;
+					rowHeight = imageHeight;
+					scale = 1;
+				}
+				
+				// TODO - CALC SCALE FOR CUSTOM
+				// APPLY SCALE TO BITMAP SOMEHOW
+				// APPLY PADDING
+				
+				var width:Number = numColumns * columnWidth;
+				var height:Number = numRows * rowHeight;
+				
+				var bmp:BitmapData = new BitmapData( width, height, true );
+				
+				var columnCount:int = 0;
+				var rowCount:int = 0;
+				
+				var sourceRect:Rectangle;
+				var destPoint:Point;
+				
+				for each ( var data:BitmapData in imageDatas ) {
+					sourceRect = new Rectangle( 0, 0, data.width, data.height );
+					destPoint = new Point( columnCount * columnWidth, rowCount * rowHeight );
+					
+					bmp.copyPixels( data, sourceRect, destPoint );
+					
+					columnCount++;
+					
+					if ( columnCount >= numColumns ) {
+						columnCount = 0;
+						rowCount++;
+					}
+				}
+				
+				saveBitmap( bmp );
+			}
+			
+			private function saveBitmap( bmp:BitmapData ):void {
+				var encoder:PNGEncoder = new PNGEncoder();
+				var png:ByteArray = encoder.encode( bmp );
+				
+				var stream:FileStream = new FileStream();
+				stream.open( saveFile, FileMode.WRITE );
+				stream.writeBytes( png );
+				stream.close();
+				
+				clear();
+				
+				loadingDisplay.visible = false;
+			}
+			
+			private function clear():void {
+				saveFile = null;
+			}
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<s:RadioButtonGroup
+			id="layoutGroup"/>
+		
+		<s:RadioButtonGroup
+			id="sizeGroup"
+			selectedValue="image"/>
+	</fx:Declarations>
+	
+	<s:Form top="0" bottom="0" left="0" right="0">
+		
+		<s:FormItem label="PNG Directory">
+			<s:Button
+				label="Select"
+				click="handleSelectDirectory(event)"/>
+			<s:TextInput
+				id="pngDirectoryDisplay"
+				editable="false"
+				selectable="false"
+				width="250"/>
+		</s:FormItem>
+				
+		<s:FormItem label="Layout">
+			<s:RadioButton
+				label="Horizontal Line"
+				value="horizontal"
+				group="{layoutGroup}"/>
+			
+			<s:RadioButton
+				label="Vertical Line"
+				value="vertical"
+				group="{layoutGroup}"/>
+			
+			<s:RadioButton
+				label="Custom"
+				value="custom"
+				group="{layoutGroup}"/>
+		</s:FormItem>
+		
+		<s:FormItem label="Number of Rows" enabled="{layoutGroup.selectedValue == 'custom'}">
+			<s:NumericStepper
+				id="rowStepper"
+				minimum="1" maximum="99" value="1"/>
+		</s:FormItem>
+		
+		<s:FormItem label="Number of Columns" enabled="{layoutGroup.selectedValue == 'custom'}">
+			<s:NumericStepper
+				id="columnStepper"
+				minimum="1" maximum="99" value="1"/>
+		</s:FormItem>
+		
+		<s:FormItem label="Cell Padding Horizontal">
+			<s:NumericStepper
+				id="cellPaddingHorizontalStepper"
+				minimum="0" maximum="9999" value="0"/>
+		</s:FormItem>
+		
+		<s:FormItem label="Cell Padding Vertical">
+			<s:NumericStepper
+				id="cellPaddingVerticalStepper"
+				minimum="0" maximum="9999" value="0"/>
+		</s:FormItem>
+		
+		<s:FormItem label="Cell Size">
+			<s:RadioButton
+				label="Image Size"
+				value="image"
+				group="{sizeGroup}"/>
+			
+			<s:RadioButton
+				label="Custom"
+				value="custom"
+				group="{sizeGroup}"/>
+		</s:FormItem>
+		
+		<s:FormItem label="Cell Width" enabled="{sizeGroup.selectedValue == 'custom'}">
+			<s:NumericStepper
+				id="cellWidthStepper"
+				minimum="1" maximum="9999" value="100"/>
+		</s:FormItem>
+		
+		<s:FormItem label="Cell Height" enabled="{sizeGroup.selectedValue == 'custom'}">
+			<s:NumericStepper
+				id="cellHeightStepper"
+				minimum="1" maximum="9999" value="100"/>
+		</s:FormItem>
+		
+		<s:FormItem>
+			<s:Button
+				label="Create Sprite Sheet"
+				click="handleCreateClick(event)"/>
+		</s:FormItem>
+		
+	</s:Form>
+	
+	<s:Group
+		id="loadingDisplay"
+		top="0" bottom="0" left="0" right="0"
+		visible="false">
+		
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:SolidColor color="black" alpha=".75"/>
+			</s:fill>
+		</s:Rect>
+		
+		<mx:ProgressBar
+			indeterminate="true"
+			width="300"
+			color="white"
+			verticalCenter="0"
+			horizontalCenter="0"/>
+		
+	</s:Group>
+	
+</s:WindowedApplication>
