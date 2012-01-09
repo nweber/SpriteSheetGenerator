@@ -140,8 +140,11 @@
 					scale = 1;
 				}
 				
-				var verticalOffset:Number = cellPaddingVerticalStepper.value / 2;
-				var horizontalOffset:Number = cellPaddingHorizontalStepper.value / 2;
+				var verticalOffset:Number = cellPaddingVerticalStepper.value;
+				var horizontalOffset:Number = cellPaddingHorizontalStepper.value;
+				
+				columnWidth += horizontalOffset;
+				rowHeight += verticalOffset;
 				
 				var width:Number = numColumns * columnWidth;
 				var height:Number = numRows * rowHeight;
@@ -154,6 +157,8 @@
 				var sourceBmp:BitmapData;
 				var sourceMtx:Matrix;
 				var sourceRect:Rectangle;
+				var destX:Number;
+				var destY:Number;
 				var destPoint:Point;
 				
 				for each ( var data:BitmapData in imageDatas ) {
@@ -164,13 +169,16 @@
 						sourceMtx = new Matrix();
 						sourceMtx.scale( scale, scale );
 						
-						sourceBmp = new BitmapData( columnWidth, rowHeight );
+						sourceBmp = new BitmapData( data.width * scale, data.height * scale );
 						sourceBmp.draw( data, sourceMtx );
 					}
 					
-					sourceRect = new Rectangle( 0, 0, columnWidth, rowHeight );
-					destPoint = new Point( columnCount * columnWidth + horizontalOffset,
-										   rowCount * rowHeight + verticalOffset );
+					sourceRect = new Rectangle( 0, 0, sourceBmp.width, sourceBmp.height );
+					
+					destX = ( columnCount * columnWidth ) - ( horizontalOffset / 2 );
+					destX = ( rowCount * rowHeight ) - ( verticalOffset / 2 );
+					
+					destPoint = new Point( destX, destY );
 					
 					bmp.copyPixels( data, sourceRect, destPoint );
 					
