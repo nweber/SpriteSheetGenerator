@@ -19,15 +19,37 @@
 			private var currentImageFile:File;
 			private var imageLoader:Loader;
 			
+			private var output:BitmapData;
+			private var numColumns:int;
+			private var numRows:int;
+			private var columnCount:int;
+			private var rowCount:int;
+			private var imageWidth:Number;
+			private var imageHeight:Number;
+			private var columnWidth:Number;
+			private var rowHeight:Number;
+			private var scale:Number;
+			private var verticalOffset:Number;
+			private var horizontalOffset:Number;
+			
 			private function handleSelectDirectory( event:MouseEvent ):void {
 				pngDirectory = new File();
 				pngDirectory.addEventListener( Event.SELECT, handleBrowseSelect );
+				pngDirectory.addEventListener( Event.CANCEL, handleBrowseCancel );
 				pngDirectory.browseForDirectory( "Selecy Directory" );
 			}
 			
 			private function handleBrowseSelect( event:Event ):void {
 				pngDirectory.removeEventListener( Event.SELECT, handleBrowseSelect );
+				pngDirectory.removeEventListener( Event.CANCEL, handleBrowseCancel );
 				pngDirectoryDisplay.text = pngDirectory.nativePath;
+			}
+			
+			private function handleBrowseCancel( event:Event ):void {
+				pngDirectory.removeEventListener( Event.SELECT, handleBrowseSelect );
+				pngDirectory.removeEventListener( Event.CANCEL, handleBrowseCancel );
+				pngDirectory = null;
+				pngDirectoryDisplay.text = null;
 			}
 			
 			private function handleCreateClick( event:MouseEvent ):void {
@@ -98,13 +120,9 @@
 				clear();
 			}
 			
-			// TODO
-			// GENERATE THE BITMAP ASYNC
-			// SAVE FILE ASYNC
-			
 			private function generateBitmap():void {
-				var numColumns:int = columnStepper.value;
-				var numRows:int = rowStepper.value;
+				numColumns = columnStepper.value;
+				numRows = rowStepper.value;
 				
 				if ( layoutGroup.selectedValue == "horizontal" ) {
 					numColumns = imageDatas.length;
@@ -119,12 +137,8 @@
 					numRows = rowStepper.value;
 				}
 				
-				var imageWidth:Number = (imageDatas[0] as BitmapData).width;
-				var imageHeight:Number = (imageDatas[0] as BitmapData).height;
-				
-				var columnWidth:Number;
-				var rowHeight:Number;
-				var scale:Number;
+				imageWidth = (imageDatas[0] as BitmapData).width;
+				imageHeight = (imageDatas[0] as BitmapData).height;
 				
 				if ( sizeGroup.selectedValue == "custom" ) {
 					columnWidth = cellWidthStepper.value;
@@ -140,8 +154,8 @@
 					scale = 1;
 				}
 				
-				var verticalOffset:Number = cellPaddingVerticalStepper.value;
-				var horizontalOffset:Number = cellPaddingHorizontalStepper.value;
+				verticalOffset = cellPaddingVerticalStepper.value;
+				horizontalOffset = cellPaddingHorizontalStepper.value;
 				
 				columnWidth += horizontalOffset;
 				rowHeight += verticalOffset;
@@ -149,19 +163,26 @@
 				var width:Number = numColumns * columnWidth;
 				var height:Number = numRows * rowHeight;
 				
-				var bmp:BitmapData = new BitmapData( width, height, true );
+				output = new BitmapData( width, height );
+				columnCount = 0;
+				rowCount = 0;
 				
-				var columnCount:int = 0;
-				var rowCount:int = 0;
-				
-				var sourceBmp:BitmapData;
-				var sourceMtx:Matrix;
-				var sourceRect:Rectangle;
-				var destX:Number;
-				var destY:Number;
-				var destPoint:Point;
-				
-				for each ( var data:BitmapData in imageDatas ) {
+				// Wrap in a call later to execute next frame.
+				// If we do it all at once the application will lock up and the progress bar will stop.
+				callLater( processBitmapQueue );
+			}
+			
+			private function processBitmapQueue():void {
+				if ( imageDatas.length > 0 ) {
+					var sourceBmp:BitmapData;
+					var sourceMtx:Matrix;
+					var sourceRect:Rectangle;
+					var destX:Number;
+					var destY:Number;
+					var destPoint:Point;
+					
+					var data:BitmapData = imageDatas.splice( 0, 1 )[0];
+					
 					if ( scale == 1 ) {
 						sourceBmp = data;
 					}
@@ -175,12 +196,12 @@
 					
 					sourceRect = new Rectangle( 0, 0, sourceBmp.width, sourceBmp.height );
 					
-					destX = ( columnCount * columnWidth ) - ( horizontalOffset / 2 );
-					destX = ( rowCount * rowHeight ) - ( verticalOffset / 2 );
+					destX = ( columnCount * columnWidth ) + ( horizontalOffset / 2 );
+					destY = ( rowCount * rowHeight ) + ( verticalOffset / 2 );
 					
 					destPoint = new Point( destX, destY );
 					
-					bmp.copyPixels( data, sourceRect, destPoint );
+					output.copyPixels( sourceBmp, sourceRect, destPoint );
 					
 					columnCount++;
 					
@@ -188,9 +209,14 @@
 						columnCount = 0;
 						rowCount++;
 					}
+					
+					// Wrap in a call later to execute next frame.
+					// If we do it all at once the application will lock up and the progress bar will stop.
+					callLater( processBitmapQueue );
 				}
-				
-				saveBitmap( bmp );
+				else {
+					saveBitmap( output );
+				}
 			}
 			
 			private function saveBitmap( bmp:BitmapData ):void {
@@ -198,7 +224,7 @@
 				var png:ByteArray = encoder.encode( bmp );
 				
 				var stream:FileStream = new FileStream();
-				stream.open( saveFile, FileMode.WRITE );
+				stream.openAsync( saveFile, FileMode.WRITE );
 				stream.writeBytes( png );
 				stream.close();
 				
