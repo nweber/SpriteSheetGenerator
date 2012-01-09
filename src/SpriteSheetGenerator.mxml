@@ -98,6 +98,10 @@
 				clear();
 			}
 			
+			// TODO
+			// GENERATE THE BITMAP ASYNC
+			// SAVE FILE ASYNC
+			
 			private function generateBitmap():void {
 				var numColumns:int = columnStepper.value;
 				var numRows:int = rowStepper.value;
@@ -125,8 +129,10 @@
 				if ( sizeGroup.selectedValue == "custom" ) {
 					columnWidth = cellWidthStepper.value;
 					rowHeight = cellHeightStepper.value;
-					// calculate scale
 					
+					var vScale:Number = rowHeight / imageHeight;
+					var hScale:Number = columnWidth / imageWidth;
+					scale = Math.max( vScale, hScale );
 				}
 				else {
 					columnWidth = imageWidth;
@@ -134,9 +140,8 @@
 					scale = 1;
 				}
 				
-				// TODO - CALC SCALE FOR CUSTOM
-				// APPLY SCALE TO BITMAP SOMEHOW
-				// APPLY PADDING
+				var verticalOffset:Number = cellPaddingVerticalStepper.value / 2;
+				var horizontalOffset:Number = cellPaddingHorizontalStepper.value / 2;
 				
 				var width:Number = numColumns * columnWidth;
 				var height:Number = numRows * rowHeight;
@@ -146,12 +151,26 @@
 				var columnCount:int = 0;
 				var rowCount:int = 0;
 				
+				var sourceBmp:BitmapData;
+				var sourceMtx:Matrix;
 				var sourceRect:Rectangle;
 				var destPoint:Point;
 				
 				for each ( var data:BitmapData in imageDatas ) {
-					sourceRect = new Rectangle( 0, 0, data.width, data.height );
-					destPoint = new Point( columnCount * columnWidth, rowCount * rowHeight );
+					if ( scale == 1 ) {
+						sourceBmp = data;
+					}
+					else {
+						sourceMtx = new Matrix();
+						sourceMtx.scale( scale, scale );
+						
+						sourceBmp = new BitmapData( columnWidth, rowHeight );
+						sourceBmp.draw( data, sourceMtx );
+					}
+					
+					sourceRect = new Rectangle( 0, 0, columnWidth, rowHeight );
+					destPoint = new Point( columnCount * columnWidth + horizontalOffset,
+										   rowCount * rowHeight + verticalOffset );
 					
 					bmp.copyPixels( data, sourceRect, destPoint );
 					
