@@ -8,7 +8,6 @@
 	<fx:Script>
 		<![CDATA[
 			import mx.controls.Alert;
-			import mx.graphics.codec.PNGEncoder;
 			
 			private var pngDirectory:File;
 			private var saveFile:File;
@@ -18,6 +17,8 @@
 			
 			private var currentImageFile:File;
 			private var imageLoader:Loader;
+			
+			private var encoder:PNGEncoder2;
 			
 			private function handleSelectDirectory( event:MouseEvent ):void {
 				pngDirectory = new File();
@@ -98,10 +99,6 @@
 				clear();
 			}
 			
-			// TODO
-			// GENERATE THE BITMAP ASYNC
-			// SAVE FILE ASYNC
-			
 			private function generateBitmap():void {
 				var numColumns:int = columnStepper.value;
 				var numRows:int = rowStepper.value;
@@ -176,7 +173,7 @@
 					sourceRect = new Rectangle( 0, 0, sourceBmp.width, sourceBmp.height );
 					
 					destX = ( columnCount * columnWidth ) - ( horizontalOffset / 2 );
-					destX = ( rowCount * rowHeight ) - ( verticalOffset / 2 );
+					destY = ( rowCount * rowHeight ) - ( verticalOffset / 2 );
 					
 					destPoint = new Point( destX, destY );
 					
@@ -194,8 +191,15 @@
 			}
 			
 			private function saveBitmap( bmp:BitmapData ):void {
-				var encoder:PNGEncoder = new PNGEncoder();
-				var png:ByteArray = encoder.encode( bmp );
+				PNGEncoder2.level = CompressionLevel.GOOD;
+				encoder = PNGEncoder2.encodeAsync( bmp );
+				encoder.addEventListener( Event.COMPLETE, handleEncodeComplete );
+			}
+			
+			private function handleEncodeComplete( event:Event ):void {
+				encoder.removeEventListener( Event.COMPLETE, handleEncodeComplete );
+				
+				var png:ByteArray = encoder.png;
 				
 				var stream:FileStream = new FileStream();
 				stream.open( saveFile, FileMode.WRITE );
